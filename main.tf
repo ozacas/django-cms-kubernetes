@@ -125,3 +125,56 @@ resource "kubernetes_replication_controller" "django-cms-psql-rc" {
       }
    }
 }
+
+resource "kubernetes_replication_controller" "django-cms" {
+    metadata {
+        name = "django-cms"
+        namespace = kubernetes_namespace.django-cms.metadata[0].name
+        labels = {
+            app = "django-cms"
+        }
+    }
+
+    spec {
+        selector = {
+            app  = "django-cms"
+            tier = "frontend"
+        }
+        template {
+            container {
+              image = "ozacas/django-cms-arm64:v0.1.7"
+              name  = "django-cms-arm64"
+
+              port {
+                  container_port = 8000
+                  name           = "django-cms"
+              }
+
+              resources {
+                  limits {
+                     memory = "1G"
+                  }
+              }
+            }
+        }
+    }
+}
+
+resource "kubernetes_service" "django-cms" {
+    metadata {
+        name = "django-cms-service"
+    }
+
+    spec {
+        selector = {
+            app = kubernetes_replication_controller.django-cms.metadata.0.labels.app
+        }
+        session_affinity = "ClientIP"
+        port {
+            port        = 8000
+            target_port = 8000
+        }
+
+        type = "LoadBalancer"
+    }
+}
