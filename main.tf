@@ -163,6 +163,7 @@ resource "kubernetes_replication_controller" "django-cms" {
 resource "kubernetes_service" "django-cms" {
     metadata {
         name = "django-cms-service"
+        namespace = kubernetes_namespace.django-cms.metadata[0].name
     }
 
     spec {
