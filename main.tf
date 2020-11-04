@@ -7,6 +7,18 @@ resource "kubernetes_namespace" "django-cms" {
     }
 }
 
+resource "kubernetes_storage_class" "lazy-local-storage" {
+    metadata {
+        name = "lazy-local-storage" # NB: must match regex
+#        namespace = kubernetes_namespace.django-cms.metadata[0].name
+    }
+
+    storage_provisioner = "topolvm-provisioner"
+    reclaim_policy = "Retain"
+
+    volume_binding_mode = "WaitForFirstConsumer" # to ensure volume is co-located with psql container
+}
+
 resource "kubernetes_persistent_volume" "django-cms-psql-volume" {
     metadata {
        name = "django-cms-psql-volume"
@@ -16,14 +28,17 @@ resource "kubernetes_persistent_volume" "django-cms-psql-volume" {
        capacity = {
           storage = "10Gi"
        }
+
        access_modes = ["ReadWriteOnce"]
+       persistent_volume_reclaim_policy = "Retain"
+       storage_class_name = kubernetes_storage_class.lazy-local-storage.metadata.0.name
+
        persistent_volume_source {
-          csi {
-             driver = "topolvm-provisioner"
-             volume_handle = "django-cms-psql-volume"
-          }
+           csi {
+               driver = "topolvm-provisioner"
+               volume_handle = "lazy-local-storage"
+           }
        }
-       storage_class_name = "topolvm-provisioner"
     }
 }
 
@@ -40,6 +55,7 @@ resource "kubernetes_persistent_volume_claim" "django-cms-psql-pvc" {
              storage = "10Gi"
           }
        }
+       storage_class_name = kubernetes_storage_class.lazy-local-storage.metadata.0.name
        volume_name = kubernetes_persistent_volume.django-cms-psql-volume.metadata.0.name
     }
 }
@@ -66,6 +82,7 @@ resource "kubernetes_service" "django-cms-psql" {
       namespace = kubernetes_namespace.django-cms.metadata[0].name
       labels = {
         app = "django-cms"
+        tier = "backend"
       }
     }
     spec {
@@ -77,7 +94,7 @@ resource "kubernetes_service" "django-cms-psql" {
           app  = "django-cms"
           tier = kubernetes_replication_controller.django-cms-psql-rc.spec[0].selector.tier
         }
-        cluster_ip = "None"
+        type = "LoadBalancer"
     }
 }
 
@@ -87,6 +104,7 @@ resource "kubernetes_replication_controller" "django-cms-psql-rc" {
       namespace = kubernetes_namespace.django-cms.metadata[0].name
       labels = {
          app = "django-cms"
+         tier = "backend"
       }
    }
    spec {
@@ -145,15 +163,29 @@ resource "kubernetes_replication_controller" "django-cms" {
               image = "ozacas/django-cms-arm64:v0.1.7"
               name  = "django-cms-arm64"
 
+              env {
+                 name = "POSTGRES_HOST"
+                 value = kubernetes_service.django-cms-psql.spec[0].cluster_ip
+              }
+              env {
+                 name = "POSTGRES_PORT"
+                 value = kubernetes_service.django-cms-psql.spec[0].port[0].port
+              }
+              env_from {
+                 config_map_ref {
+                    name = kubernetes_config_map.django-cms-psql-configmap.metadata[0].name
+                 }
+              }
+
               port {
-                  container_port = 8000
-                  name           = "django-cms"
+                 container_port = 8000
+                 name           = "django-cms"
               }
 
               resources {
-                  limits {
+                 limits {
                      memory = "1G"
-                  }
+                 }
               }
             }
         }
