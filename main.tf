@@ -13,33 +13,10 @@ resource "kubernetes_storage_class" "lazy-local-storage" {
 #        namespace = kubernetes_namespace.django-cms.metadata[0].name
     }
 
-    storage_provisioner = "topolvm-provisioner"
+    storage_provisioner = "topolvm.cybozu.com"
     reclaim_policy = "Retain"
 
     volume_binding_mode = "WaitForFirstConsumer" # to ensure volume is co-located with psql container
-}
-
-resource "kubernetes_persistent_volume" "django-cms-psql-volume" {
-    metadata {
-       name = "django-cms-psql-volume"
-    }
-
-    spec {
-       capacity = {
-          storage = "10Gi"
-       }
-
-       access_modes = ["ReadWriteOnce"]
-       persistent_volume_reclaim_policy = "Retain"
-       storage_class_name = kubernetes_storage_class.lazy-local-storage.metadata.0.name
-
-       persistent_volume_source {
-           csi {
-               driver = "topolvm-provisioner"
-               volume_handle = "lazy-local-storage"
-           }
-       }
-    }
 }
 
 resource "kubernetes_persistent_volume_claim" "django-cms-psql-pvc" {
@@ -49,15 +26,16 @@ resource "kubernetes_persistent_volume_claim" "django-cms-psql-pvc" {
     }
 
     spec {
-       access_modes = ["ReadWriteOnce"]
+       access_modes = [ "ReadWriteOnce" ]
        resources {
           requests = {
-             storage = "10Gi"
+             storage = "9Gi"
           }
        }
        storage_class_name = kubernetes_storage_class.lazy-local-storage.metadata.0.name
-       volume_name = kubernetes_persistent_volume.django-cms-psql-volume.metadata.0.name
     }
+
+    wait_until_bound = false
 }
 
 resource "kubernetes_config_map" "django-cms-psql-configmap" {
@@ -129,13 +107,13 @@ resource "kubernetes_replication_controller" "django-cms-psql-rc" {
              }
 
              volume_mount {
-                name       = kubernetes_persistent_volume.django-cms-psql-volume.metadata[0].name
+                name       = "pgdata"
                 mount_path = "/var/lib/psql/data"
              }
           }
 
           volume {
-             name = kubernetes_persistent_volume.django-cms-psql-volume.metadata[0].name
+             name = "pgdata"
              persistent_volume_claim {
                 claim_name = kubernetes_persistent_volume_claim.django-cms-psql-pvc.metadata[0].name
              }
