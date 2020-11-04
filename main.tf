@@ -35,7 +35,7 @@ resource "kubernetes_persistent_volume_claim" "django-cms-psql-pvc" {
        storage_class_name = kubernetes_storage_class.lazy-local-storage.metadata.0.name
     }
 
-    wait_until_bound = false
+    wait_until_bound = false # NB: node topology scheduling may take time... so dont wait for now
 }
 
 resource "kubernetes_config_map" "django-cms-psql-configmap" {
