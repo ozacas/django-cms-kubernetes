@@ -1,0 +1,20 @@
+FROM python:3.8-slim-buster as base
+
+FROM base as build
+RUN mkdir /app && mkdir /install
+COPY requirements.txt /requirements.txt
+RUN pip3 install --prefer-binary --target=/install -r requirements.txt
+WORKDIR /app
+
+FROM base
+RUN useradd --create-home --home-dir /app app
+COPY --from=build /app /app
+COPY --from=build /install /usr/local/lib/python3.8/site-packages
+
+# NB: project name is hardcoded to cms for now
+RUN cd /app && python3 /usr/local/lib/python3.8/site-packages/mezzanine/bin/mezzanine_project.py cms
+
+USER app
+WORKDIR /app/cms
+EXPOSE 8000
+ENTRYPOINT python3 manage.py runserver
