@@ -1,2 +1,14 @@
-# django-cms-kubernetes
-Provision Django CMS (+postgresql) on kubernetes cluster using terraform
+
+EITHER:
+~~~~
+cd django-cms
+# edit settings.py for your needs
+terraform apply
+~~~~
+
+OR:
+
+~~~~
+cd mezzanine
+terraform apply
+~~~~
